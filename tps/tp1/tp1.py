@@ -4,43 +4,59 @@ import multiprocessing
 import time
 import sys
 
-def cambiar_color(color,imagen,contador):
-  print("Te cambeo el color")
-    #Creo archivo imagen 1
-  nombre_archivo = "dog"+str(contador)+".ppm"
-  a = 0
-  imagen_cambiada = []
-  for i in range(len(imagen)):
-    #de bytes a decimal
-    a = int.from_bytes(imagen[i], byteorder='big')
-    if i > 80:
-      seteoColor = a * color;
-      #decimal a bytes
-      enteriso_variable = int(seteoColor)
-    else:
-      enteriso_variable = int(a)
-    if(enteriso_variable > 255):
-      enteriso_variable = 255
-    retorno_bytes = enteriso_variable.to_bytes((enteriso_variable.bit_length() +7 ) // 8, 'big') or b'\0'
-    imagen_cambiada.append(retorno_bytes)
-  creo_imagen(nombre_archivo,imagen_cambiada)
+def agrego_intensidad(data, intensidad):
+  color = int.from_bytes(data, byteorder='big')  # convierte los bytes en int
+  intensidad_ = color*intensidad #le doy intensidad al color
+  if(intensidad_ > 255):  
+    intensidad_ = 255 #en caso de que sea mayor la intensidad obligo  a tener el maximo
+  color_con_intensidad = intensidad_.to_bytes((intensidad_.bit_length(
+  ) + 7) // 8, 'big') or b'\0'  #vuelvo a bytes
+  return color_con_intensidad
 
-def creo_imagen(nombre_archivo,imagen):
-  print(nombre_archivo)
-  archivo_imagen = os.open(nombre_archivo, os.O_RDWR|os.O_CREAT)
+def write_image(archivo_imagen,imagen):
+  print("Escribo header del archivo")
   for x in range(len(imagen)):
     os.write(archivo_imagen, imagen[x])
     
-def do_nothing(seg,imagen,contador,rojo,verde,azul):
-  print("Espero {} seg".format(seg))
-  time.sleep(seg)
-  print("ya espere")
-  if contador == 0:
-    cambiar_color(rojo,imagen,contador)
-  if contador == 1:
-    cambiar_color(verde,imagen,contador)
-  if contador == 2:
-    cambiar_color(azul,imagen,contador)
+def logistica(body,header,color,q,i):
+  q.put(body)
+
+  if i == 0:
+    cambio_color(header,color,q,i)
+  if i == 1:
+    cambio_color(header,color,q,i)
+  if i == 2:
+    cambio_color(header,color,q,i)
+
+def cambio_color(header,color,q,i):
+  cola = q.get()
+  nombre_archivo = "dog"+str(i)+".ppm"
+  archivo_imagen = os.open(nombre_archivo, os.O_RDWR|os.O_CREAT)
+  print("Intensidad: {}".format(color))
+  print("Imagen: {}".format(i))
+
+  #Encabezado
+  write_image(archivo_imagen,header)
+      
+  j = 1
+  r = 0
+  print("Escribo el cuerpo del archivo")
+  for l in cola:
+    if(j - (3*r) == 1):
+      if i == 0:
+        os.write(archivo_imagen,agrego_intensidad(l,color))
+        os.write(archivo_imagen,b'\x00')
+        os.write(archivo_imagen,b'\x00')
+      if i == 1:
+        os.write(archivo_imagen,b'\x00')
+        os.write(archivo_imagen,agrego_intensidad(l,color))
+        os.write(archivo_imagen,b'\x00')
+      if i == 2:
+        os.write(archivo_imagen,b'\x00')
+        os.write(archivo_imagen,b'\x00')
+        os.write(archivo_imagen,agrego_intensidad(l,color))
+      r = r+1
+    j = j + 1
 
 if __name__ == '__main__':
 
@@ -57,35 +73,55 @@ if __name__ == '__main__':
   blue = int(args.blue)
   size = int(args.size)
 
+  color = []
+  color.append(red)
+  color.append(green)
+  color.append(blue)
+
   if not os.path.isfile(args.archivo):
     print("File path {} does not exist. Exiting...".format(args.archivo))
     sys.exit()
   imagen1 = []
   imagen2 = []
   imagen3 = []
+  imagen1_header = []
+  imagen2_header = []
+  imagen3_header = []
 
   fp = os.open(args.archivo,os.O_RDWR)
 
+  contador = 0
   while True:
     line = os.read(fp,size)
-    imagen1.append(line)
-    imagen2.append(line)
-    imagen3.append(line)
-    if size > len(line):    
-      break
-
-  procesar_imagen = []
-  procesar_imagen.append(imagen1)
-  procesar_imagen.append(imagen2)
-  procesar_imagen.append(imagen3)
-
-  #print(procesar_imagen[1])
-  proc = []
-  contador = 0
-  for i in range(3):
-    proc.append(multiprocessing.Process(target=do_nothing,args= (3,procesar_imagen[contador],contador,red,green,blue) ))
-    proc[i].start()
+    if contador <= 30:
+      #Save header
+      imagen1_header.append(line)
+      imagen2_header.append(line)
+      imagen3_header.append(line)
+    else:
+      #Save body
+      imagen1.append(line)
+      imagen2.append(line)
+      imagen3.append(line)
     contador += 1
+    if size > len(line):
+          break
+
+  imagen_body = []
+  imagen_body.append(imagen1)
+  imagen_body.append(imagen2)
+  imagen_body.append(imagen3)
+
+  imagen_header = []
+  imagen_header.append(imagen1_header)
+  imagen_header.append(imagen2_header)
+  imagen_header.append(imagen3_header)
+
+  proc = []
+  q = multiprocessing.Queue()
+  for i in range(3):
+    proc.append(multiprocessing.Process(target=logistica,args= (imagen_body[i],imagen_header[i],color[i],q,i) ))
+    proc[i].start()
 
   print(proc)
 
