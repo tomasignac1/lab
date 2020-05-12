@@ -3,6 +3,11 @@ import os
 import multiprocessing
 import time
 import sys
+import array
+
+
+class ArgsError(Exception):
+    pass
 
 def agrego_intensidad(data, intensidad):
   color = int.from_bytes(data, byteorder='big')  # convierte los bytes en int
@@ -72,15 +77,22 @@ if __name__ == '__main__':
   green = int(args.green)
   blue = int(args.blue)
   size = int(args.size)
+  if not os.path.isfile(args.archivo):
+    print("File path {} does not exist. Exiting...".format(args.archivo))
+    sys.exit()
+
+  try:
+    if red < 0 or green < 0 or blue < 0 or size < 0:
+          raise ArgsError
+  except ArgsError:
+    print("\nERROR\nError al ingresar las intensidades de los colores y/o lectura de tamaño \n")
+    exit(-1)
 
   color = []
   color.append(red)
   color.append(green)
   color.append(blue)
 
-  if not os.path.isfile(args.archivo):
-    print("File path {} does not exist. Exiting...".format(args.archivo))
-    sys.exit()
   imagen1 = []
   imagen2 = []
   imagen3 = []
