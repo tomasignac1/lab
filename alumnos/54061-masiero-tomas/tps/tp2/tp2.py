@@ -5,8 +5,6 @@ import sys
 import array
 import fmanager
 import worker
-import worker_blue
-import worker_green
 from concurrent import futures
 import threading
 
