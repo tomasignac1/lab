@@ -4,11 +4,13 @@ import time
 import sys
 import array
 import fmanager
-import worker_red
+import worker
 import worker_blue
 import worker_green
 from concurrent import futures
-#import functools
+import threading
+
+start = time.perf_counter()
 
 if __name__ == '__main__':
 
@@ -36,22 +38,51 @@ if __name__ == '__main__':
   os.lseek(fd,off,0) #rebobina al principio del raster
   geometria = [width,height,maxval,comentario,off,interleave,l_total]
 
+  #Logic messege
+  fd_messege = os.open(messege, os.O_RDONLY)
+  mensaje_leido = os.read(fd_messege,l_total)
+  renglon = mensaje_leido.splitlines()
+  dimension_mensaje = len (renglon[0]) + 1
+  for n in range(0,len(renglon)):
+    dimension_mensaje = dimension_mensaje + len(renglon[n]) + 1
+    take_messege = renglon[n]
+    messege_bin = ' '.join(format(x, 'b') for x in bytearray(take_messege))
+    messege_decoded = bytes.decode(take_messege)
+    print(str(messege_decoded))
+    print(messege_bin)
+  list_messege = list(messege_bin)
+  res = list_messege[0]
+  print("RES: " +str(res))
+
   #Creamos archivo nuevo
   ppm_header = fmanager.crea_encabezado(geometria)
   # Save the PPM image as a binary file
   fd_new =  open(nombre_archivo, 'wb')
   fd_new.write(bytearray(ppm_header.encode()))
 
+  # barrera
+  barrera = 0
+  # barrera = threading.Barrier(0)
   #Creamos hilos
-  hilos = futures.ThreadPoolExecutor(max_workers=6)
+  hilos = futures.ThreadPoolExecutor(max_workers=3)
   #resultado_a_futuro = hilos.map(functools.partial(workers.filter, nombre_archivo,seg),geometria)#mapeo
-  red = [ hilos.submit(worker_red.filter_red,geometria,nombre_archivo,fd,fd_new,size,messege,1)  for i in range(1,0,-1)]
-  green = [ hilos.submit(worker_green.filter_green,geometria,nombre_archivo,fd,fd_new,size,messege,2)  for i in range(1,0,-1)]
-  blue = [ hilos.submit(worker_blue.filter_blue,geometria,nombre_archivo,fd,fd_new,size,messege,3)  for i in range(1,0,-1)]
+  red = [ hilos.submit(worker.filter,geometria,nombre_archivo,fd,fd_new,size,list_messege,0,barrera)  for i in range(1,0,-1)]
+  green = [ hilos.submit(worker.filter,geometria,nombre_archivo,fd,fd_new,size,list_messege,1,barrera)  for i in range(1,0,-1)]
+  blue = [ hilos.submit(worker.filter,geometria,nombre_archivo,fd,fd_new,size,list_messege,2,barrera)  for i in range(1,0,-1)]
   for r in futures.as_completed(red):
-    print (r.result())
+        print (r.result())
   for g in futures.as_completed(green):
-    print (g.result())
+        print (g.result())
   for b in futures.as_completed(blue):
-    print (b.result())
-  
+        print (b.result())
+  finish = time.perf_counter()
+  tt = round(finish-start,3)
+  print ("tiempo total = ",tt)
+  # NUM_HILOS = 3
+  # hilos = [threading.Thread(name='Hilo -%s' % i, 
+  #                           target=worker.filter_red, 
+  #                           args=(geometria,nombre_archivo,fd,fd_new,size,list_messege,barrera,),
+  #                           ) for i in range(NUM_HILOS)]
+  # for hilo in hilos:
+  #   print(hilo.name, 'Comenzando ejecución')
+  #   hilo.start()
